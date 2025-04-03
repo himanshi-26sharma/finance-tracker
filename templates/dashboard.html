@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard-container">
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-messages">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">
+                        {{ message }}
+                        <button type="button" class="close" onclick="this.parentElement.remove()">
+                            &times;
+                        </button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Error Display -->
+    {% if error_message %}
+        <div class="alert alert-danger">
+            <strong>Error:</strong> {{ error_message }}
+            <button type="button" class="retry-btn" onclick="window.location.reload()">
+                Retry
+            </button>
+        </div>
+    {% endif %}
+
+    <!-- Financial Summary Cards -->
+    <div class="financial-summary">
+        <!-- Balance Card -->
+        <div class="summary-card {% if balance is defined and balance >= 0 %}positive{% else %}negative{% endif %}">
+            <div class="card-header">
+                <i class="fas fa-wallet"></i>
+                <h3>Current Balance</h3>
+            </div>
+            <div class="card-body">
+                <span class="amount">${{ "%.2f"|format(balance) if balance is defined else '0.00' }}</span>
+            </div>
+        </div>
+
+        <!-- Income Card -->
+        <div class="summary-card positive">
+            <div class="card-header">
+                <i class="fas fa-arrow-down"></i>
+                <h3>Total Income</h3>
+            </div>
+            <div class="card-body">
+                <span class="amount">${{ "%.2f"|format(income) if income is defined else '0.00' }}</span>
+            </div>
+        </div>
+
+        <!-- Expense Card -->
+        <div class="summary-card negative">
+            <div class="card-header">
+                <i class="fas fa-arrow-up"></i>
+                <h3>Total Expenses</h3>
+            </div>
+            <div class="card-body">
+                <span class="amount">${{ "%.2f"|format(expenses) if expenses is defined else '0.00' }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="charts-section">
+        <!-- Expense Distribution Chart -->
+        <div class="chart-container">
+            <div class="chart-header">
+                <h3><i class="fas fa-chart-pie"></i> Expense Distribution</h3>
+            </div>
+            
+            {% if not expense_categories %}
+                <div class="no-data">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <p>No expense data available</p>
+                    <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">
+                        Add Expense
+                    </a>
+                </div>
+            {% else %}
+                {% if expense_chart %}
+                    <img src="data:image/png;base64,{{ expense_chart }}" 
+                         alt="Expense Distribution" 
+                         class="chart-img"
+                         onerror="this.style.display='none'; document.getElementById('chart-error').style.display='block'">
+                    <div id="chart-error" style="display: none;" class="alert alert-warning">
+                        Chart failed to load. Please refresh.
+                    </div>
+                {% endif %}
+                
+                <div class="chart-legend">
+                    {% for category, amount in expense_categories.items() %}
+                    <div class="legend-item">
+                        <span class="legend-color" 
+                              style="background-color: {{ 
+                                  colors[loop.index0 % colors|length] if colors and colors|length > 0 
+                                  else '#FF6384' 
+                              }}"></span>
+                        <span class="legend-label">{{ category }}</span>
+                        <span class="legend-value">${{ "%.2f"|format(amount) }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Monthly Trends Placeholder -->
+        <div class="chart-container">
+            <div class="chart-header">
+                <h3><i class="fas fa-chart-line"></i> Monthly Trends</h3>
+            </div>
+            <div class="no-data">
+                <i class="fas fa-clock"></i>
+                <p>Feature coming soon</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Transactions Section -->
+    <div class="recent-transactions">
+        <div class="section-header">
+            <h3><i class="fas fa-history"></i> Recent Activity</h3>
+            <div>
+                <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Add New
+                </a>
+                {% if export_enabled %}
+                    <a href="{{ url_for('export_csv') }}" class="btn btn-secondary">
+                        <i class="fas fa-download"></i> Export
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if not transactions %}
+            <div class="empty-state">
+                <i class="fas fa-money-bill-wave"></i>
+                <p>No transactions found in database</p>
+                <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">
+                    Create Your First Transaction
+                </a>
+            </div>
+        {% else %}
+            <div class="table-responsive">
+                <table class="transaction-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Category</th>
+                            <th>Type</th>
+                            <th>Amount</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for transaction in transactions %}
+                        <tr class="{% if transaction.type == 'income' %}income-row{% else %}expense-row{% endif %}">
+                            <td>{{ transaction.date }}</td>
+                            <td>{{ transaction.category }}</td>
+                            <td>
+                                <span class="badge {% if transaction.type == 'income' %}badge-income{% else %}badge-expense{% endif %}">
+                                    {{ transaction.type|title }}
+                                </span>
+                            </td>
+                            <td>${{ "%.2f"|format(transaction.amount) }}</td>
+                            <td>
+                                <form action="{{ url_for('delete_transaction', transaction_id=transaction.id) }}" method="POST">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure?')">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="view-all">
+                <a href="#" class="btn btn-link">
+                    View Full History <i class="fas fa-chevron-right"></i>
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
